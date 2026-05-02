@@ -112,7 +112,7 @@ class _ComicReaderPageState extends State<ComicReaderPage> {
     await SystemChrome.setEnabledSystemUIMode(
       enabled ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
     );
-    await SystemChrome.setSystemUIOverlayStyle(
+    SystemChrome.setSystemUIOverlayStyle(
       enabled ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
     );
   }
