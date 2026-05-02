@@ -1,0 +1,68 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: "Bundle identifier used before phone-side signing"
+        required: true
+        default: "com.readerrebuild.app"
+      app_name:
+        description: "Output IPA name"
+        required: true
+        default: "LeonBooks"
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ios-unsigned-ipa.yml"
+
+jobs:
+  build-ios:
+    name: Build unsigned IPA on macOS
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          flutter --version
+          flutter doctor -v
+
+      - name: Ensure CocoaPods is available
+        run: |
+          pod --version || sudo gem install cocoapods
+
+      - name: Build unsigned IPA
+        env:
+          IOS_BUNDLE_ID: ${{ github.event.inputs.bundle_id || 'com.readerrebuild.app' }}
+          APP_NAME: ${{ github.event.inputs.app_name || 'LeonBooks' }}
+          APP_DISPLAY_NAME: "Leon的书"
+          IOS_SKIP_PREFLIGHT_BUILD: "1"
+        run: |
+          chmod +x scripts/bootstrap_ios.sh scripts/package_unsigned_ipa.sh
+          IOS_BUNDLE_ID="$IOS_BUNDLE_ID" APP_DISPLAY_NAME="$APP_DISPLAY_NAME" ./scripts/bootstrap_ios.sh
+          APP_NAME="$APP_NAME" ./scripts/package_unsigned_ipa.sh
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ios-ipa
+          path: mobile/build/ios/unsigned/*.ipa
+          if-no-files-found: error
+          retention-days: 14
