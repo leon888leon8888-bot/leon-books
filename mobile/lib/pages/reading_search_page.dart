@@ -11,9 +11,11 @@ class ReadingSearchPage extends StatefulWidget {
   const ReadingSearchPage({
     super.key,
     required this.sessionStore,
+    this.embedded = false,
   });
 
   final SessionStore sessionStore;
+  final bool embedded;
 
   @override
   State<ReadingSearchPage> createState() => _ReadingSearchPageState();
@@ -59,6 +61,13 @@ class _ReadingSearchPageState extends State<ReadingSearchPage> {
         _mode = options.defaultMode;
         _category = options.defaultCategory;
       });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('连接阅读服务失败：$error')),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -476,61 +485,67 @@ class _ReadingSearchPageState extends State<ReadingSearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    final body = _loadingOptions
+        ? const Center(child: CircularProgressIndicator())
+        : RefreshIndicator(
+            onRefresh: _loadOptions,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildSearchControls(),
+                const SizedBox(height: 8),
+                if (_searching)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_result == null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Text(
+                        '输入书名或作者即可搜索。结果会自动合并同一作品，并标注小说、漫画、听书能力。',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              height: 1.5,
+                            ),
+                      ),
+                    ),
+                  )
+                else ...[
+                  Row(
+                    children: [
+                      Text(
+                        '搜索结果',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${_result!.groupCount}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  for (final group in _result!.items) _buildGroupCard(group),
+                  _buildRunSummary(),
+                ],
+              ],
+            ),
+          );
+
+    if (widget.embedded) {
+      return body;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('搜索'),
       ),
-      body: _loadingOptions
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadOptions,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildSearchControls(),
-                  const SizedBox(height: 8),
-                  if (_searching)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 32),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (_result == null)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(18),
-                        child: Text(
-                          '搜索会优先使用稳定书源，自动合并同一作品，并允许你手动选择具体来源。',
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                height: 1.5,
-                              ),
-                        ),
-                      ),
-                    )
-                  else ...[
-                    Row(
-                      children: [
-                        Text(
-                          '搜索结果',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${_result!.groupCount}',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    for (final group in _result!.items) _buildGroupCard(group),
-                    _buildRunSummary(),
-                  ],
-                ],
-              ),
-            ),
+      body: body,
     );
   }
 }

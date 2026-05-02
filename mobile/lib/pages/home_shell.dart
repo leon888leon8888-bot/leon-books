@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../services/session_store.dart';
 import 'bookshelf_page.dart';
-import 'cloud_page.dart';
 import 'optimize_page.dart';
-import 'sources_page.dart';
+import 'reading_search_page.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -24,9 +23,8 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
+      ReadingSearchPage(sessionStore: widget.sessionStore, embedded: true),
       BookshelfPage(sessionStore: widget.sessionStore),
-      SourcesPage(sessionStore: widget.sessionStore),
-      CloudPage(sessionStore: widget.sessionStore),
       OptimizePage(sessionStore: widget.sessionStore),
     ];
 
@@ -44,19 +42,14 @@ class _HomeShellState extends State<HomeShell> {
         },
         destinations: const [
           NavigationDestination(
+            icon: Icon(Icons.search_outlined),
+            selectedIcon: Icon(Icons.search),
+            label: '找书',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.menu_book_outlined),
             selectedIcon: Icon(Icons.menu_book),
             label: '书架',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.hub_outlined),
-            selectedIcon: Icon(Icons.hub),
-            label: '书源',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.cloud_outlined),
-            selectedIcon: Icon(Icons.cloud),
-            label: '同步',
           ),
           NavigationDestination(
             icon: Icon(Icons.tune_outlined),

@@ -6,6 +6,7 @@ cd "$ROOT_DIR"
 
 APP_NAME="${APP_NAME:-LeonBooks}"
 APP_API_BASE_URL="${APP_API_BASE_URL:-}"
+APP_API_FALLBACK_BASE_URLS="${APP_API_FALLBACK_BASE_URLS:-}"
 APP_API_TOKEN="${APP_API_TOKEN:-}"
 OUT_DIR="$ROOT_DIR/build/ios/unsigned"
 PAYLOAD_DIR="$OUT_DIR/Payload"
@@ -29,15 +30,38 @@ command -v flutter >/dev/null 2>&1 || die "flutter is required."
 command -v xcodebuild >/dev/null 2>&1 || die "xcodebuild is required."
 
 if [[ -n "$APP_API_BASE_URL" || -n "$APP_API_TOKEN" ]]; then
+  if [[ -z "$APP_API_BASE_URL" ]]; then
+    die "APP_API_BASE_URL is required when bundling app configuration."
+  fi
+  if [[ -z "$APP_API_TOKEN" ]]; then
+    die "APP_API_TOKEN is required. Set the READER_REBUILD_API_TOKEN GitHub secret before building a user IPA."
+  fi
+  CONFIG_URLS="$APP_API_BASE_URL"
+  if [[ -n "$APP_API_FALLBACK_BASE_URLS" ]]; then
+    CONFIG_URLS="$APP_API_FALLBACK_BASE_URLS"
+  fi
+  IFS=',' read -r -a CONFIG_URL_ARRAY <<< "$CONFIG_URLS"
   log "Writing bundled app configuration"
-  cat > "$ROOT_DIR/lib/app_config.dart" <<EOF
+  {
+    cat <<EOF
 class AppConfig {
   const AppConfig._();
 
   static const apiBaseUrl = '$APP_API_BASE_URL';
+  static const apiBaseUrls = <String>[
+EOF
+    for url in "${CONFIG_URL_ARRAY[@]}"; do
+      trimmed="$(printf '%s' "$url" | xargs)"
+      if [[ -n "$trimmed" ]]; then
+        printf "    '%s',\n" "$trimmed"
+      fi
+    done
+    cat <<EOF
+  ];
   static const apiToken = '$APP_API_TOKEN';
 }
 EOF
+  } > "$ROOT_DIR/lib/app_config.dart"
 fi
 
 if [[ ! -d ios ]]; then

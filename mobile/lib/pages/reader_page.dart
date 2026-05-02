@@ -791,7 +791,9 @@ class _ReaderPageState extends State<ReaderPage> {
                         .map(
                           (engine) => DropdownMenuItem(
                             value: engine.id,
-                            child: Text('${engine.name} · ${engine.voice}'),
+                            child: Text(engine.voice.isEmpty
+                                ? engine.name
+                                : '${engine.name} · ${engine.voice}'),
                           ),
                         )
                         .toList(),

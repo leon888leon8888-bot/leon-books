@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../app_config.dart';
 import '../models/app_models.dart';
 
 class ApiClient {
@@ -12,8 +13,25 @@ class ApiClient {
 
   final String baseUrl;
   final String token;
+  String? _activeBaseUrl;
+  static const Duration _timeout = Duration(seconds: 20);
 
-  Uri _uri(String path) => Uri.parse('$baseUrl$path');
+  List<String> get _baseUrls {
+    final urls = <String>[
+      if (_activeBaseUrl != null) _activeBaseUrl!,
+      baseUrl,
+      ...AppConfig.apiBaseUrls,
+    ];
+    final seen = <String>{};
+    return [
+      for (final url in urls)
+        if (url.trim().isNotEmpty && seen.add(url.trim())) url.trim(),
+    ];
+  }
+
+  Uri _uri(String path, {String? overrideBaseUrl}) {
+    return Uri.parse('${overrideBaseUrl ?? baseUrl}$path');
+  }
 
   Map<String, String> _headers({bool json = false}) {
     return {
@@ -32,14 +50,68 @@ class ApiClient {
     return body;
   }
 
+  bool _shouldTryNext(Object error) {
+    final text = '$error'.toLowerCase();
+    return text.contains('failed host lookup') ||
+        text.contains('no route to host') ||
+        text.contains('connection refused') ||
+        text.contains('connection timed out') ||
+        text.contains('timed out') ||
+        text.contains('network is unreachable') ||
+        text.contains('socketexception') ||
+        text.contains('clientexception');
+  }
+
+  Future<http.Response> _request(
+    String path, {
+    required String method,
+    Object? body,
+    Map<String, String>? queryParameters,
+  }) async {
+    Object? lastError;
+    for (final candidateBaseUrl in _baseUrls) {
+      final uri = _uri(path, overrideBaseUrl: candidateBaseUrl)
+          .replace(queryParameters: queryParameters);
+      try {
+        final headers = _headers(json: body != null);
+        final encodedBody = body == null ? null : jsonEncode(body);
+        final response = switch (method) {
+          'GET' => await http.get(uri, headers: headers).timeout(_timeout),
+          'POST' => await http
+              .post(uri, headers: headers, body: encodedBody)
+              .timeout(_timeout),
+          'PATCH' => await http
+              .patch(uri, headers: headers, body: encodedBody)
+              .timeout(_timeout),
+          'PUT' => await http
+              .put(uri, headers: headers, body: encodedBody)
+              .timeout(_timeout),
+          _ => throw UnsupportedError('Unsupported HTTP method: $method'),
+        };
+        if (response.statusCode >= 500 && candidateBaseUrl != _baseUrls.last) {
+          lastError = Exception('服务暂时不可用：${response.statusCode}');
+          continue;
+        }
+        _activeBaseUrl = candidateBaseUrl;
+        return response;
+      } catch (error) {
+        lastError = error;
+        if (!_shouldTryNext(error)) {
+          rethrow;
+        }
+      }
+    }
+    throw Exception('无法连接阅读服务，请切换手机网络后重试。$lastError');
+  }
+
   Future<ReaderUser> getMe() async {
-    final response = await http.get(_uri('/me'), headers: _headers());
+    final response = await _request('/me', method: 'GET');
     final json = await _json(response);
     return ReaderUser.fromJson(json);
   }
 
   Future<List<ShelfBook>> getBookshelf() async {
-    final response = await http.get(_uri('/bookshelf'), headers: _headers());
+    final response = await _request('/bookshelf', method: 'GET');
     final json = jsonDecode(response.body) as List<dynamic>;
     return json
         .map((item) => ShelfBook.fromJson(item as Map<String, dynamic>))
@@ -61,10 +133,10 @@ class ApiClient {
     double progress = 0,
     String origin = 'manual',
   }) async {
-    final response = await http.post(
-      _uri('/bookshelf'),
-      headers: _headers(json: true),
-      body: jsonEncode({
+    final response = await _request(
+      '/bookshelf',
+      method: 'POST',
+      body: {
         'title': title,
         'author': author,
         'coverUrl': coverUrl,
@@ -78,7 +150,7 @@ class ApiClient {
         'currentChapterIndex': currentChapterIndex,
         'progress': progress,
         'origin': origin,
-      }),
+      },
     );
     final json = await _json(response);
     return ShelfBook.fromJson(json);
@@ -100,10 +172,10 @@ class ApiClient {
     double progress = 0,
     String origin = 'search',
   }) async {
-    final response = await http.post(
-      _uri('/bookshelf/upsert'),
-      headers: _headers(json: true),
-      body: jsonEncode({
+    final response = await _request(
+      '/bookshelf/upsert',
+      method: 'POST',
+      body: {
         if (id.isNotEmpty) 'id': id,
         'title': title,
         'author': author,
@@ -118,7 +190,7 @@ class ApiClient {
         'currentChapterIndex': currentChapterIndex,
         'progress': progress,
         'origin': origin,
-      }),
+      },
     );
     final json = await _json(response);
     return ShelfBook.fromJson(json);
@@ -134,10 +206,10 @@ class ApiClient {
     String? sourceKey,
     String? sourceId,
   }) async {
-    final response = await http.patch(
-      _uri('/bookshelf/$bookId/progress'),
-      headers: _headers(json: true),
-      body: jsonEncode({
+    final response = await _request(
+      '/bookshelf/$bookId/progress',
+      method: 'PATCH',
+      body: {
         'progress': progress,
         'currentChapter': currentChapter,
         if (currentChapterIndex != null) 'currentChapterIndex': currentChapterIndex,
@@ -145,14 +217,14 @@ class ApiClient {
         if (bookUrl != null) 'bookUrl': bookUrl,
         if (sourceKey != null) 'sourceKey': sourceKey,
         if (sourceId != null) 'sourceId': sourceId,
-      }),
+      },
     );
     final json = await _json(response);
     return ShelfBook.fromJson(json);
   }
 
   Future<List<SourceRule>> getSources() async {
-    final response = await http.get(_uri('/sources'), headers: _headers());
+    final response = await _request('/sources', method: 'GET');
     final json = jsonDecode(response.body) as List<dynamic>;
     return json
         .map((item) => SourceRule.fromJson(item as Map<String, dynamic>))
@@ -160,7 +232,7 @@ class ApiClient {
   }
 
   Future<SearchOptions> getSearchOptions() async {
-    final response = await http.get(_uri('/search/options'), headers: _headers());
+    final response = await _request('/search/options', method: 'GET');
     final json = await _json(response);
     return SearchOptions.fromJson(json);
   }
@@ -170,30 +242,27 @@ class ApiClient {
     required String url,
     required String type,
   }) async {
-    final response = await http.post(
-      _uri('/sources/import'),
-      headers: _headers(json: true),
-      body: jsonEncode({
+    final response = await _request(
+      '/sources/import',
+      method: 'POST',
+      body: {
         'name': name,
         'url': url,
         'type': type,
-      }),
+      },
     );
     final json = await _json(response);
     return SourceRule.fromJson(json);
   }
 
   Future<SourceRule> checkSource(String sourceId) async {
-    final response = await http.post(
-      _uri('/sources/$sourceId/check'),
-      headers: _headers(json: true),
-    );
+    final response = await _request('/sources/$sourceId/check', method: 'POST');
     final json = await _json(response);
     return SourceRule.fromJson(json);
   }
 
   Future<List<RssSource>> getRssSources() async {
-    final response = await http.get(_uri('/rss-sources'), headers: _headers());
+    final response = await _request('/rss-sources', method: 'GET');
     final json = jsonDecode(response.body) as List<dynamic>;
     return json
         .map((item) => RssSource.fromJson(item as Map<String, dynamic>))
@@ -201,7 +270,7 @@ class ApiClient {
   }
 
   Future<List<ReplaceRule>> getReplaceRules() async {
-    final response = await http.get(_uri('/replace-rules'), headers: _headers());
+    final response = await _request('/replace-rules', method: 'GET');
     final json = jsonDecode(response.body) as List<dynamic>;
     return json
         .map((item) => ReplaceRule.fromJson(item as Map<String, dynamic>))
@@ -209,7 +278,7 @@ class ApiClient {
   }
 
   Future<List<TtsEngine>> getTtsEngines() async {
-    final response = await http.get(_uri('/tts-engines'), headers: _headers());
+    final response = await _request('/tts-engines', method: 'GET');
     final json = jsonDecode(response.body) as List<dynamic>;
     return json
         .map((item) => TtsEngine.fromJson(item as Map<String, dynamic>))
@@ -217,7 +286,7 @@ class ApiClient {
   }
 
   Future<List<ThemePreset>> getThemes() async {
-    final response = await http.get(_uri('/themes'), headers: _headers());
+    final response = await _request('/themes', method: 'GET');
     final json = jsonDecode(response.body) as List<dynamic>;
     return json
         .map((item) => ThemePreset.fromJson(item as Map<String, dynamic>))
@@ -225,23 +294,20 @@ class ApiClient {
   }
 
   Future<ReadConfig> getReadConfig() async {
-    final response = await http.get(_uri('/read-config'), headers: _headers());
+    final response = await _request('/read-config', method: 'GET');
     final json = await _json(response);
     return ReadConfig.fromJson(json);
   }
 
   Future<ReadConfig> updateReadConfig(Map<String, dynamic> payload) async {
-    final response = await http.put(
-      _uri('/read-config'),
-      headers: _headers(json: true),
-      body: jsonEncode(payload),
-    );
+    final response =
+        await _request('/read-config', method: 'PUT', body: payload);
     final json = await _json(response);
     return ReadConfig.fromJson(json);
   }
 
   Future<LibraryOverview> getLibraryOverview() async {
-    final response = await http.get(_uri('/library/overview'), headers: _headers());
+    final response = await _request('/library/overview', method: 'GET');
     final json = await _json(response);
     return LibraryOverview.fromJson(json);
   }
@@ -250,42 +316,31 @@ class ApiClient {
     required String pathType,
     required dynamic payload,
   }) async {
-    final response = await http.post(
-      _uri('/import/$pathType'),
-      headers: _headers(json: true),
-      body: jsonEncode(payload),
-    );
+    final response =
+        await _request('/import/$pathType', method: 'POST', body: payload);
     final json = await _json(response);
     return ImportResult.fromJson(json);
   }
 
   Future<SyncOverview> getSyncOverview() async {
-    final response = await http.get(_uri('/sync/overview'), headers: _headers());
+    final response = await _request('/sync/overview', method: 'GET');
     final json = await _json(response);
     return SyncOverview.fromJson(json);
   }
 
   Future<void> backupBookshelf() async {
-    final response = await http.post(
-      _uri('/sync/bookshelf/backup'),
-      headers: _headers(json: true),
-    );
+    final response =
+        await _request('/sync/bookshelf/backup', method: 'POST');
     await _json(response);
   }
 
   Future<void> backupSources() async {
-    final response = await http.post(
-      _uri('/sync/sources/backup'),
-      headers: _headers(json: true),
-    );
+    final response = await _request('/sync/sources/backup', method: 'POST');
     await _json(response);
   }
 
   Future<void> pushProgress() async {
-    final response = await http.post(
-      _uri('/sync/progress/push'),
-      headers: _headers(json: true),
-    );
+    final response = await _request('/sync/progress/push', method: 'POST');
     await _json(response);
   }
 
@@ -294,15 +349,15 @@ class ApiClient {
     bool? autoSourceBackup,
     bool? autoProgressSync,
   }) async {
-    final response = await http.patch(
-      _uri('/sync/settings'),
-      headers: _headers(json: true),
-      body: jsonEncode({
+    final response = await _request(
+      '/sync/settings',
+      method: 'PATCH',
+      body: {
         if (autoBookshelfBackup != null)
           'autoBookshelfBackup': autoBookshelfBackup,
         if (autoSourceBackup != null) 'autoSourceBackup': autoSourceBackup,
         if (autoProgressSync != null) 'autoProgressSync': autoProgressSync,
-      }),
+      },
     );
     final json = await _json(response);
     return SyncOverview.fromJson({
@@ -329,9 +384,10 @@ class ApiClient {
       'page': '$page',
       if (sourceId.isNotEmpty) 'sourceId': sourceId,
     };
-    final response = await http.get(
-      _uri('/reading/search').replace(queryParameters: parameters),
-      headers: _headers(),
+    final response = await _request(
+      '/reading/search',
+      method: 'GET',
+      queryParameters: parameters,
     );
     final json = await _json(response);
     return ReadingSearchResult.fromJson(json);
@@ -351,11 +407,8 @@ class ApiClient {
       'page': page,
       if (sourceIds.isNotEmpty) 'sourceIds': sourceIds,
     };
-    final response = await http.post(
-      _uri('/search/books'),
-      headers: _headers(json: true),
-      body: jsonEncode(payload),
-    );
+    final response =
+        await _request('/search/books', method: 'POST', body: payload);
     final json = await _json(response);
     return GroupedSearchResult.fromJson(json);
   }
@@ -364,16 +417,16 @@ class ApiClient {
     required ReadingBook book,
     String sourceId = '',
   }) async {
-    final response = await http.post(
-      _uri('/reading/chapters'),
-      headers: _headers(json: true),
-      body: jsonEncode({
+    final response = await _request(
+      '/reading/chapters',
+      method: 'POST',
+      body: {
         if (sourceId.isNotEmpty) 'sourceId': sourceId,
         if (sourceId.isEmpty && book.sourceUrl.isNotEmpty)
           'bookSourceUrl': book.sourceUrl,
         'url': book.bookUrl,
         'bookname': book.name,
-      }),
+      },
     );
     final json = await _json(response);
     return ReadingChapterResult.fromJson(json);
@@ -384,10 +437,10 @@ class ApiClient {
     required ReadingChapter chapter,
     String sourceId = '',
   }) async {
-    final response = await http.post(
-      _uri('/reading/content'),
-      headers: _headers(json: true),
-      body: jsonEncode({
+    final response = await _request(
+      '/reading/content',
+      method: 'POST',
+      body: {
         if (sourceId.isNotEmpty) 'sourceId': sourceId,
         if (sourceId.isEmpty && book.sourceUrl.isNotEmpty)
           'bookSourceUrl': book.sourceUrl,
@@ -395,14 +448,14 @@ class ApiClient {
         'bookname': book.name,
         'index': chapter.index,
         'type': book.type,
-      }),
+      },
     );
     final json = await _json(response);
     return ReadingContent.fromJson(json);
   }
 
   Future<String> getDefaultTtsId() async {
-    final response = await http.get(_uri('/tts/default'), headers: _headers());
+    final response = await _request('/tts/default', method: 'GET');
     final json = await _json(response);
     return json['id'] as String? ?? '';
   }
@@ -412,11 +465,12 @@ class ApiClient {
     required String text,
     int speechRate = 5,
   }) {
-    return _uri('/tts/stream').replace(
+    return _uri('/tts/stream', overrideBaseUrl: _activeBaseUrl).replace(
       queryParameters: {
         'id': id,
         'text': text,
         'speechRate': '$speechRate',
+        if (token.isNotEmpty) 'token': token,
       },
     );
   }
