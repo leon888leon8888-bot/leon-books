@@ -22,6 +22,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
   late ApiClient _client;
   List<ShelfBook> _books = const [];
   bool _loading = true;
+  bool _offline = false;
 
   @override
   void initState() {
@@ -42,6 +43,14 @@ class _BookshelfPageState extends State<BookshelfPage> {
       }
       setState(() {
         _books = books;
+        _offline = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _offline = true;
       });
     } finally {
       if (mounted) {
@@ -257,6 +266,28 @@ class _BookshelfPageState extends State<BookshelfPage> {
         padding: const EdgeInsets.all(16),
         children: [
           _buildHeroCard(recentBook),
+          if (_offline) ...[
+            const SizedBox(height: 8),
+            Card(
+              color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.35),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.wifi_off_rounded),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text('服务器暂时连接不上。请检查手机网络，或稍后下拉刷新重试。'),
+                    ),
+                    TextButton(
+                      onPressed: _refresh,
+                      child: const Text('重试'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             children: [

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../services/session_store.dart';
-import '../utils/display_labels.dart';
 import 'bookshelf_page.dart';
 import 'cloud_page.dart';
 import 'optimize_page.dart';
@@ -24,7 +23,6 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final session = widget.sessionStore.state.value;
     final pages = [
       BookshelfPage(sessionStore: widget.sessionStore),
       SourcesPage(sessionStore: widget.sessionStore),
@@ -34,22 +32,7 @@ class _HomeShellState extends State<HomeShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('欢迎，${session.user?.displayName ?? "主人"}'),
-        actions: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Chip(
-                label: Text(membershipLabel(session.user?.membershipTier ?? 'founder')),
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: () => widget.sessionStore.resetSetup(),
-            icon: const Icon(Icons.settings_backup_restore),
-            tooltip: '重新配置后端',
-          ),
-        ],
+        title: const Text('Leon的书'),
       ),
       body: pages[_index],
       bottomNavigationBar: NavigationBar(
@@ -78,7 +61,7 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(
             icon: Icon(Icons.tune_outlined),
             selectedIcon: Icon(Icons.tune),
-            label: '优化',
+            label: '设置',
           ),
         ],
       ),

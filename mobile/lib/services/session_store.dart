@@ -20,18 +20,24 @@ class SessionStore {
     final email = prefs.getString('email');
     final displayName = prefs.getString('displayName');
     final membershipTier = prefs.getString('membershipTier');
+    final user = userId == null || email == null || displayName == null
+        ? const ReaderUser(
+            id: 'owner',
+            email: 'owner@leon.local',
+            displayName: 'Leon',
+            membershipTier: 'founder',
+          )
+        : ReaderUser(
+            id: userId,
+            email: email,
+            displayName: displayName,
+            membershipTier: membershipTier ?? 'founder',
+          );
 
     state.value = SessionState(
       baseUrl: baseUrl,
       token: token,
-      user: userId == null || email == null || displayName == null
-          ? null
-          : ReaderUser(
-              id: userId,
-              email: email,
-              displayName: displayName,
-              membershipTier: membershipTier ?? 'founder',
-            ),
+      user: user,
     );
   }
 
@@ -79,7 +85,12 @@ class SessionStore {
     state.value = SessionState(
       baseUrl: baseUrl,
       token: AppConfig.apiToken.isNotEmpty ? AppConfig.apiToken : '',
-      user: null,
+      user: const ReaderUser(
+        id: 'owner',
+        email: 'owner@leon.local',
+        displayName: 'Leon',
+        membershipTier: 'founder',
+      ),
     );
   }
 }

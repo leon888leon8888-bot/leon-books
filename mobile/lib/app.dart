@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'pages/home_shell.dart';
-import 'pages/setup_page.dart';
 import 'services/api_client.dart';
 import 'services/session_store.dart';
 
@@ -49,7 +48,7 @@ class _ReaderRebuildAppState extends State<ReaderRebuildApp> {
         user: user,
       );
     } catch (_) {
-      // Fall back to the setup page if the bundled server configuration fails.
+      // Keep the consumer app usable; content pages will show retry affordances.
     }
   }
 
@@ -108,10 +107,7 @@ class _ReaderRebuildAppState extends State<ReaderRebuildApp> {
           ? const Scaffold(body: Center(child: CupertinoActivityIndicator()))
           : ValueListenableBuilder(
               valueListenable: _sessionStore.state,
-              builder: (context, session, _) {
-                if (!session.isReady) {
-                  return SetupPage(sessionStore: _sessionStore);
-                }
+              builder: (context, _, __) {
                 return HomeShell(sessionStore: _sessionStore);
               },
             ),
