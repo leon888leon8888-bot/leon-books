@@ -1,18 +1,35 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+# Local secrets
+.codex-ops/
+*.token
+*token*.txt
+*.env
+!.env.example
+!deploy/*.env.example
 
-# Other files and folders
-.settings/
+# Node/backend
+backend/node_modules/
+backend/data/
+backend/backups/
+npm-debug.log*
 
-# Executables
-*.swf
-*.air
+# Flutter/Dart
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.metadata
+mobile/build/
+mobile/ios/
+mobile/android/
+mobile/pubspec.lock
+
+# Build artifacts
 *.ipa
-*.apk
+*.app
+*.xcarchive
+*.dSYM.zip
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

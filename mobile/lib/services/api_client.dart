@@ -1,0 +1,423 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../models/app_models.dart';
+
+class ApiClient {
+  ApiClient({
+    required this.baseUrl,
+    required this.token,
+  });
+
+  final String baseUrl;
+  final String token;
+
+  Uri _uri(String path) => Uri.parse('$baseUrl$path');
+
+  Map<String, String> _headers({bool json = false}) {
+    return {
+      if (json) 'Content-Type': 'application/json',
+      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<Map<String, dynamic>> _json(http.Response response) async {
+    final body = response.body.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode >= 400) {
+      throw Exception(body['message'] ?? '请求失败');
+    }
+    return body;
+  }
+
+  Future<ReaderUser> getMe() async {
+    final response = await http.get(_uri('/me'), headers: _headers());
+    final json = await _json(response);
+    return ReaderUser.fromJson(json);
+  }
+
+  Future<List<ShelfBook>> getBookshelf() async {
+    final response = await http.get(_uri('/bookshelf'), headers: _headers());
+    final json = jsonDecode(response.body) as List<dynamic>;
+    return json
+        .map((item) => ShelfBook.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ShelfBook> addBook({
+    required String title,
+    required String author,
+    required String currentChapter,
+    String coverUrl = '',
+    String intro = '',
+    String wordCount = '',
+    String sourceId = '',
+    String sourceKey = '',
+    String bookUrl = '',
+    int type = 0,
+    int currentChapterIndex = 0,
+    double progress = 0,
+    String origin = 'manual',
+  }) async {
+    final response = await http.post(
+      _uri('/bookshelf'),
+      headers: _headers(json: true),
+      body: jsonEncode({
+        'title': title,
+        'author': author,
+        'coverUrl': coverUrl,
+        'intro': intro,
+        'wordCount': wordCount,
+        'sourceId': sourceId,
+        'sourceKey': sourceKey,
+        'bookUrl': bookUrl,
+        'type': type,
+        'currentChapter': currentChapter,
+        'currentChapterIndex': currentChapterIndex,
+        'progress': progress,
+        'origin': origin,
+      }),
+    );
+    final json = await _json(response);
+    return ShelfBook.fromJson(json);
+  }
+
+  Future<ShelfBook> upsertBook({
+    String id = '',
+    required String title,
+    required String author,
+    String coverUrl = '',
+    String intro = '',
+    String wordCount = '',
+    String sourceId = '',
+    String sourceKey = '',
+    String bookUrl = '',
+    int type = 0,
+    String currentChapter = '开始阅读',
+    int currentChapterIndex = 0,
+    double progress = 0,
+    String origin = 'search',
+  }) async {
+    final response = await http.post(
+      _uri('/bookshelf/upsert'),
+      headers: _headers(json: true),
+      body: jsonEncode({
+        if (id.isNotEmpty) 'id': id,
+        'title': title,
+        'author': author,
+        'coverUrl': coverUrl,
+        'intro': intro,
+        'wordCount': wordCount,
+        'sourceId': sourceId,
+        'sourceKey': sourceKey,
+        'bookUrl': bookUrl,
+        'type': type,
+        'currentChapter': currentChapter,
+        'currentChapterIndex': currentChapterIndex,
+        'progress': progress,
+        'origin': origin,
+      }),
+    );
+    final json = await _json(response);
+    return ShelfBook.fromJson(json);
+  }
+
+  Future<ShelfBook> updateProgress({
+    required String bookId,
+    required double progress,
+    required String currentChapter,
+    int? currentChapterIndex,
+    String? coverUrl,
+    String? bookUrl,
+    String? sourceKey,
+    String? sourceId,
+  }) async {
+    final response = await http.patch(
+      _uri('/bookshelf/$bookId/progress'),
+      headers: _headers(json: true),
+      body: jsonEncode({
+        'progress': progress,
+        'currentChapter': currentChapter,
+        if (currentChapterIndex != null) 'currentChapterIndex': currentChapterIndex,
+        if (coverUrl != null) 'coverUrl': coverUrl,
+        if (bookUrl != null) 'bookUrl': bookUrl,
+        if (sourceKey != null) 'sourceKey': sourceKey,
+        if (sourceId != null) 'sourceId': sourceId,
+      }),
+    );
+    final json = await _json(response);
+    return ShelfBook.fromJson(json);
+  }
+
+  Future<List<SourceRule>> getSources() async {
+    final response = await http.get(_uri('/sources'), headers: _headers());
+    final json = jsonDecode(response.body) as List<dynamic>;
+    return json
+        .map((item) => SourceRule.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SearchOptions> getSearchOptions() async {
+    final response = await http.get(_uri('/search/options'), headers: _headers());
+    final json = await _json(response);
+    return SearchOptions.fromJson(json);
+  }
+
+  Future<SourceRule> importSource({
+    required String name,
+    required String url,
+    required String type,
+  }) async {
+    final response = await http.post(
+      _uri('/sources/import'),
+      headers: _headers(json: true),
+      body: jsonEncode({
+        'name': name,
+        'url': url,
+        'type': type,
+      }),
+    );
+    final json = await _json(response);
+    return SourceRule.fromJson(json);
+  }
+
+  Future<SourceRule> checkSource(String sourceId) async {
+    final response = await http.post(
+      _uri('/sources/$sourceId/check'),
+      headers: _headers(json: true),
+    );
+    final json = await _json(response);
+    return SourceRule.fromJson(json);
+  }
+
+  Future<List<RssSource>> getRssSources() async {
+    final response = await http.get(_uri('/rss-sources'), headers: _headers());
+    final json = jsonDecode(response.body) as List<dynamic>;
+    return json
+        .map((item) => RssSource.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<ReplaceRule>> getReplaceRules() async {
+    final response = await http.get(_uri('/replace-rules'), headers: _headers());
+    final json = jsonDecode(response.body) as List<dynamic>;
+    return json
+        .map((item) => ReplaceRule.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<TtsEngine>> getTtsEngines() async {
+    final response = await http.get(_uri('/tts-engines'), headers: _headers());
+    final json = jsonDecode(response.body) as List<dynamic>;
+    return json
+        .map((item) => TtsEngine.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<ThemePreset>> getThemes() async {
+    final response = await http.get(_uri('/themes'), headers: _headers());
+    final json = jsonDecode(response.body) as List<dynamic>;
+    return json
+        .map((item) => ThemePreset.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ReadConfig> getReadConfig() async {
+    final response = await http.get(_uri('/read-config'), headers: _headers());
+    final json = await _json(response);
+    return ReadConfig.fromJson(json);
+  }
+
+  Future<ReadConfig> updateReadConfig(Map<String, dynamic> payload) async {
+    final response = await http.put(
+      _uri('/read-config'),
+      headers: _headers(json: true),
+      body: jsonEncode(payload),
+    );
+    final json = await _json(response);
+    return ReadConfig.fromJson(json);
+  }
+
+  Future<LibraryOverview> getLibraryOverview() async {
+    final response = await http.get(_uri('/library/overview'), headers: _headers());
+    final json = await _json(response);
+    return LibraryOverview.fromJson(json);
+  }
+
+  Future<ImportResult> importByType({
+    required String pathType,
+    required dynamic payload,
+  }) async {
+    final response = await http.post(
+      _uri('/import/$pathType'),
+      headers: _headers(json: true),
+      body: jsonEncode(payload),
+    );
+    final json = await _json(response);
+    return ImportResult.fromJson(json);
+  }
+
+  Future<SyncOverview> getSyncOverview() async {
+    final response = await http.get(_uri('/sync/overview'), headers: _headers());
+    final json = await _json(response);
+    return SyncOverview.fromJson(json);
+  }
+
+  Future<void> backupBookshelf() async {
+    final response = await http.post(
+      _uri('/sync/bookshelf/backup'),
+      headers: _headers(json: true),
+    );
+    await _json(response);
+  }
+
+  Future<void> backupSources() async {
+    final response = await http.post(
+      _uri('/sync/sources/backup'),
+      headers: _headers(json: true),
+    );
+    await _json(response);
+  }
+
+  Future<void> pushProgress() async {
+    final response = await http.post(
+      _uri('/sync/progress/push'),
+      headers: _headers(json: true),
+    );
+    await _json(response);
+  }
+
+  Future<SyncOverview> updateSyncSettings({
+    bool? autoBookshelfBackup,
+    bool? autoSourceBackup,
+    bool? autoProgressSync,
+  }) async {
+    final response = await http.patch(
+      _uri('/sync/settings'),
+      headers: _headers(json: true),
+      body: jsonEncode({
+        if (autoBookshelfBackup != null)
+          'autoBookshelfBackup': autoBookshelfBackup,
+        if (autoSourceBackup != null) 'autoSourceBackup': autoSourceBackup,
+        if (autoProgressSync != null) 'autoProgressSync': autoProgressSync,
+      }),
+    );
+    final json = await _json(response);
+    return SyncOverview.fromJson({
+      'membershipTier': 'founder',
+      'autoBookshelfBackup': json['autoBookshelfBackup'],
+      'autoSourceBackup': json['autoSourceBackup'],
+      'autoProgressSync': json['autoProgressSync'],
+      'lastBookshelfBackupAt': null,
+      'lastSourceBackupAt': null,
+      'lastProgressSyncAt': null,
+      'backupCount': 0,
+      'sourceCount': 0,
+      'shelfCount': 0,
+    });
+  }
+
+  Future<ReadingSearchResult> searchBooks({
+    required String query,
+    String sourceId = '',
+    int page = 1,
+  }) async {
+    final parameters = <String, String>{
+      'query': query,
+      'page': '$page',
+      if (sourceId.isNotEmpty) 'sourceId': sourceId,
+    };
+    final response = await http.get(
+      _uri('/reading/search').replace(queryParameters: parameters),
+      headers: _headers(),
+    );
+    final json = await _json(response);
+    return ReadingSearchResult.fromJson(json);
+  }
+
+  Future<GroupedSearchResult> searchGroupedBooks({
+    required String query,
+    String mode = 'fuzzy',
+    String category = 'book',
+    List<String> sourceIds = const [],
+    int page = 1,
+  }) async {
+    final payload = {
+      'query': query,
+      'mode': mode,
+      'category': category,
+      'page': page,
+      if (sourceIds.isNotEmpty) 'sourceIds': sourceIds,
+    };
+    final response = await http.post(
+      _uri('/search/books'),
+      headers: _headers(json: true),
+      body: jsonEncode(payload),
+    );
+    final json = await _json(response);
+    return GroupedSearchResult.fromJson(json);
+  }
+
+  Future<ReadingChapterResult> getChapters({
+    required ReadingBook book,
+    String sourceId = '',
+  }) async {
+    final response = await http.post(
+      _uri('/reading/chapters'),
+      headers: _headers(json: true),
+      body: jsonEncode({
+        if (sourceId.isNotEmpty) 'sourceId': sourceId,
+        if (sourceId.isEmpty && book.sourceUrl.isNotEmpty)
+          'bookSourceUrl': book.sourceUrl,
+        'url': book.bookUrl,
+        'bookname': book.name,
+      }),
+    );
+    final json = await _json(response);
+    return ReadingChapterResult.fromJson(json);
+  }
+
+  Future<ReadingContent> getChapterContent({
+    required ReadingBook book,
+    required ReadingChapter chapter,
+    String sourceId = '',
+  }) async {
+    final response = await http.post(
+      _uri('/reading/content'),
+      headers: _headers(json: true),
+      body: jsonEncode({
+        if (sourceId.isNotEmpty) 'sourceId': sourceId,
+        if (sourceId.isEmpty && book.sourceUrl.isNotEmpty)
+          'bookSourceUrl': book.sourceUrl,
+        'url': book.bookUrl,
+        'bookname': book.name,
+        'index': chapter.index,
+        'type': book.type,
+      }),
+    );
+    final json = await _json(response);
+    return ReadingContent.fromJson(json);
+  }
+
+  Future<String> getDefaultTtsId() async {
+    final response = await http.get(_uri('/tts/default'), headers: _headers());
+    final json = await _json(response);
+    return json['id'] as String? ?? '';
+  }
+
+  Uri buildTtsStreamUri({
+    required String id,
+    required String text,
+    int speechRate = 5,
+  }) {
+    return _uri('/tts/stream').replace(
+      queryParameters: {
+        'id': id,
+        'text': text,
+        'speechRate': '$speechRate',
+      },
+    );
+  }
+}
