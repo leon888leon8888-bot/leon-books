@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 APP_NAME="${APP_NAME:-LeonBooks}"
 OUT_DIR="$ROOT_DIR/build/ios/unsigned"
 PAYLOAD_DIR="$OUT_DIR/Payload"
-APP_BUNDLE="$ROOT_DIR/build/ios/iphoneos/Runner.app"
+DERIVED_DATA_DIR="$ROOT_DIR/build/ios/unsigned-derived-data"
 IPA_PATH="$OUT_DIR/${APP_NAME}-unsigned.ipa"
 
 log() {
@@ -40,10 +40,24 @@ if [[ -d ios ]]; then
 fi
 
 log "Building release app bundle without code signing"
-flutter build ios --release --no-codesign
+rm -rf "$DERIVED_DATA_DIR"
+xcodebuild \
+  -workspace ios/Runner.xcworkspace \
+  -scheme Runner \
+  -configuration Release \
+  -sdk iphoneos \
+  -derivedDataPath "$DERIVED_DATA_DIR" \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_IDENTITY="" \
+  DEVELOPMENT_TEAM="" \
+  PROVISIONING_PROFILE_SPECIFIER="" \
+  build
 
-if [[ ! -d "$APP_BUNDLE" ]]; then
-  die "Runner.app was not produced at $APP_BUNDLE"
+APP_BUNDLE="$(find "$DERIVED_DATA_DIR/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" -type d | head -n 1)"
+
+if [[ -z "$APP_BUNDLE" || ! -d "$APP_BUNDLE" ]]; then
+  die "Runner.app was not produced under $DERIVED_DATA_DIR/Build/Products/Release-iphoneos"
 fi
 
 log "Packaging unsigned IPA"
