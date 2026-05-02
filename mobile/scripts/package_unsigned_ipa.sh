@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 APP_NAME="${APP_NAME:-LeonBooks}"
+APP_API_BASE_URL="${APP_API_BASE_URL:-}"
+APP_API_TOKEN="${APP_API_TOKEN:-}"
 OUT_DIR="$ROOT_DIR/build/ios/unsigned"
 PAYLOAD_DIR="$OUT_DIR/Payload"
 DERIVED_DATA_DIR="$ROOT_DIR/build/ios/unsigned-derived-data"
@@ -25,6 +27,18 @@ fi
 
 command -v flutter >/dev/null 2>&1 || die "flutter is required."
 command -v xcodebuild >/dev/null 2>&1 || die "xcodebuild is required."
+
+if [[ -n "$APP_API_BASE_URL" || -n "$APP_API_TOKEN" ]]; then
+  log "Writing bundled app configuration"
+  cat > "$ROOT_DIR/lib/app_config.dart" <<EOF
+class AppConfig {
+  const AppConfig._();
+
+  static const apiBaseUrl = '$APP_API_BASE_URL';
+  static const apiToken = '$APP_API_TOKEN';
+}
+EOF
+fi
 
 if [[ ! -d ios ]]; then
   log "Generating Flutter iOS runner"

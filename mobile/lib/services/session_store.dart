@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app_config.dart';
 import '../models/app_models.dart';
 
 class SessionStore {
@@ -8,8 +9,13 @@ class SessionStore {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString('baseUrl') ?? SessionState.empty.baseUrl;
-    final token = prefs.getString('token') ?? '';
+    final savedBaseUrl = prefs.getString('baseUrl') ?? '';
+    final savedToken = prefs.getString('token') ?? '';
+    final hasBundledConfig = AppConfig.apiToken.isNotEmpty;
+    final baseUrl = hasBundledConfig
+        ? AppConfig.apiBaseUrl
+        : (savedBaseUrl.isNotEmpty ? savedBaseUrl : SessionState.empty.baseUrl);
+    final token = hasBundledConfig ? AppConfig.apiToken : savedToken;
     final userId = prefs.getString('userId');
     final email = prefs.getString('email');
     final displayName = prefs.getString('displayName');
@@ -57,7 +63,9 @@ class SessionStore {
 
   Future<void> resetSetup({bool keepBaseUrl = true}) async {
     final prefs = await SharedPreferences.getInstance();
-    final baseUrl = keepBaseUrl
+    final baseUrl = AppConfig.apiToken.isNotEmpty
+        ? AppConfig.apiBaseUrl
+        : keepBaseUrl
         ? (prefs.getString('baseUrl') ?? SessionState.empty.baseUrl)
         : SessionState.empty.baseUrl;
     await prefs.remove('token');
@@ -70,7 +78,7 @@ class SessionStore {
     }
     state.value = SessionState(
       baseUrl: baseUrl,
-      token: '',
+      token: AppConfig.apiToken.isNotEmpty ? AppConfig.apiToken : '',
       user: null,
     );
   }

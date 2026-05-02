@@ -1,3 +1,5 @@
+import '../app_config.dart';
+
 class ReaderUser {
   const ReaderUser({
     required this.id,
@@ -48,8 +50,8 @@ class SessionState {
   }
 
   static const empty = SessionState(
-    baseUrl: 'http://127.0.0.1:3030/api',
-    token: '',
+    baseUrl: AppConfig.apiBaseUrl,
+    token: AppConfig.apiToken,
     user: null,
   );
 }

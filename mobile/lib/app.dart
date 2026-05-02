@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'pages/home_shell.dart';
 import 'pages/setup_page.dart';
+import 'services/api_client.dart';
 import 'services/session_store.dart';
 
 class ReaderRebuildApp extends StatefulWidget {
@@ -25,12 +26,31 @@ class _ReaderRebuildAppState extends State<ReaderRebuildApp> {
 
   Future<void> _load() async {
     await _sessionStore.load();
+    await _autoConnect();
     if (!mounted) {
       return;
     }
     setState(() {
       _isLoaded = true;
     });
+  }
+
+  Future<void> _autoConnect() async {
+    final session = _sessionStore.state.value;
+    if (session.isReady || session.token.isEmpty) {
+      return;
+    }
+    try {
+      final client = ApiClient(baseUrl: session.baseUrl, token: session.token);
+      final user = await client.getMe();
+      await _sessionStore.saveOwnerSession(
+        baseUrl: session.baseUrl,
+        token: session.token,
+        user: user,
+      );
+    } catch (_) {
+      // Fall back to the setup page if the bundled server configuration fails.
+    }
   }
 
   ThemeData _buildTheme() {
